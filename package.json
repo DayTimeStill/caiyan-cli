@@ -1,0 +1,31 @@
+{
+  "name": "caiyan-cli",
+  "version": "1.0.0",
+  "description": "猜盐猜词终端版 - 在终端里玩每日猜词挑战",
+  "bin": {
+    "caiyan": "./index.js"
+  },
+  "type": "module",
+  "license": "MIT",
+  "keywords": [
+    "猜盐",
+    "猜词",
+    "wordle",
+    "word-guess",
+    "cli-game",
+    "terminal-game",
+    "chinese",
+    "daily-challenge"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://gitee.com/langjifengyan/caiyan-cli"
+  },
+  "author": "neza",
+  "engines": {
+    "node": ">=14"
+  },
+  "files": [
+    "index.js"
+  ]
+}
