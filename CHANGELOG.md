@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/lang/zh-CN/
 
 ## [Unreleased]
 
+## [1.1.1] - 2026-05-19
+
+### Added
+- 发布脚本集成 Claude 自动更新文档，发布前需确认
+
+### Fixed
+- 修复发布脚本中 claude -p prompt 过长报错的问题
+
 ## [1.1.0] - 2026-05-19
 
 ### Added
