@@ -1,9 +1,16 @@
 #!/usr/bin/env node
 
 import https from "https";
+import fs from "fs";
+import os from "os";
+import path from "path";
 
 const args = process.argv.slice(2);
 const AUTO_LIST = args.includes("--list") || args.includes("-l");
+
+const CACHE_DIR = path.join(os.homedir(), ".caiyan-cli");
+const CACHE_FILE = path.join(CACHE_DIR, "progress.json");
+const MAX_WORD_WIDTH = 10;
 
 const BASE = "/api/v0/quiz/daily";
 const HEADERS = {
@@ -86,6 +93,28 @@ function scoreBar(similarity) {
   return `${C.dim}${bar}${C.reset}`;
 }
 
+function displayWidth(str) {
+  let w = 0;
+  for (const ch of str) w += charWidth(ch);
+  return w;
+}
+
+function formatWord(word) {
+  const w = displayWidth(word);
+  if (w <= MAX_WORD_WIDTH) return word + " ".repeat(MAX_WORD_WIDTH - w);
+  let result = "";
+  let cw = 0;
+  for (const ch of word) {
+    const chw = charWidth(ch);
+    if (cw + chw > MAX_WORD_WIDTH - 3) break;
+    result += ch;
+    cw += chw;
+  }
+  result += "...";
+  cw += 3;
+  return result + " ".repeat(Math.max(0, MAX_WORD_WIDTH - cw));
+}
+
 function showHistory(history) {
   if (!history.length) return;
   const correct = history.find((item) => item.correct);
@@ -105,10 +134,29 @@ function showHistory(history) {
     const icon = heatIcon(item.similarity);
     const pct = `${item.similarity.toFixed(2)}%`;
     const bar = scoreBar(item.similarity);
-    console.log(`  ${icon} ${item.word.padEnd(8)} ${pct.padStart(8)}  ${bar}`);
+    console.log(`  ${icon} ${formatWord(item.word)} ${pct.padStart(8)}  ${bar}`);
   }
   if (sorted.length > 15) {
     console.log(`  ${C.dim}  ... 还有 ${sorted.length - 15} 条${C.reset}`);
+  }
+  console.log(`  ${line}`);
+}
+
+function showRecent(history) {
+  if (!history.length) return;
+  const line = `${C.dim}${"─".repeat(40)}${C.reset}`;
+  console.log(`\n  ${line}`);
+  console.log(`  ${C.bold}最近记录${C.reset}  共 ${history.length} 次`);
+  console.log(`  ${line}`);
+  const reversed = [...history].reverse();
+  for (const item of reversed.slice(0, 15)) {
+    const icon = item.correct ? `${C.green}★${C.reset}` : heatIcon(item.similarity);
+    const pct = `${item.similarity.toFixed(2)}%`;
+    const bar = scoreBar(item.similarity);
+    console.log(`  ${icon} ${formatWord(item.word)} ${pct.padStart(8)}  ${bar}`);
+  }
+  if (reversed.length > 15) {
+    console.log(`  ${C.dim}  ... 还有 ${reversed.length - 15} 条${C.reset}`);
   }
   console.log(`  ${line}`);
 }
@@ -198,6 +246,23 @@ function readLine(prompt) {
   });
 }
 
+// ── 本地缓存 ──
+
+function loadProgress(date) {
+  try {
+    const data = JSON.parse(fs.readFileSync(CACHE_FILE, "utf8"));
+    if (data.date === date) return data.history || [];
+  } catch {}
+  return [];
+}
+
+function saveProgress(date, history) {
+  try {
+    fs.mkdirSync(CACHE_DIR, { recursive: true });
+    fs.writeFileSync(CACHE_FILE, JSON.stringify({ date, history }));
+  } catch {}
+}
+
 // ── 主流程 ──
 
 async function main() {
@@ -215,11 +280,19 @@ async function main() {
 
   console.log();
   console.log(`  ${C.bold}猜词${C.reset} · ${displayDate} · ${successCount} 人已解`);
-  console.log(`  ${C.dim}输入词语回车猜测 · q 退出 · h 历史${AUTO_LIST ? " · 自动列表已开启" : ""}${C.reset}`);
+  console.log(`  ${C.dim}输入词语回车猜测 · q 退出 · h 历史 · r 最近${AUTO_LIST ? " · 自动列表已开启" : ""}${C.reset}`);
   console.log(`  ${line}`);
 
-  const history = [];
-  let attempts = 0;
+  const history = loadProgress(date);
+  let attempts = history.length;
+
+  if (history.length > 0) {
+    if (history.some((item) => item.correct)) {
+      showHistory(history);
+      return;
+    }
+    console.log(`  ${C.dim}已恢复 ${history.length} 条记录${C.reset}`);
+  }
 
   while (true) {
     let word;
@@ -236,11 +309,14 @@ async function main() {
       showHistory(history);
       continue;
     }
+    if (word === "r") {
+      showRecent(history);
+      continue;
+    }
 
     const dup = history.find((item) => item.word === word);
     if (dup) {
-      const cs = colorScore(dup.score);
-      console.log(`    ${C.dim}「${word}」已猜过  排名 ${cs}  相似度 ${dup.similarity.toFixed(2)}%${C.reset}`);
+      console.log(`    ${C.dim}「${word}」已猜过  相似度 ${dup.similarity.toFixed(2)}%${C.reset}`);
       continue;
     }
 
@@ -279,6 +355,8 @@ async function main() {
       }
     }
   }
+
+  saveProgress(date, history);
 }
 
 main();
