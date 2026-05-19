@@ -10,6 +10,12 @@ if [ -n "$(git status --porcelain)" ]; then
   exit 1
 fi
 
+# 检查 claude 是否可用
+if ! command -v claude &>/dev/null; then
+  echo "❌ 未安装 claude CLI，请先安装"
+  exit 1
+fi
+
 # 检查 npm 官方源登录状态
 if ! npm whoami --registry "$NPM_REGISTRY" &>/dev/null; then
   echo "未登录 npm 官方源，正在登录..."
@@ -45,8 +51,54 @@ NEW=$(npm version $TYPE --no-git-tag-version)
 echo ""
 echo "版本: $CURRENT → $NEW"
 
-# 提交并打 tag
-git add package.json
+# 获取上次 tag 以来的变更
+LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null)
+if [ -n "$LAST_TAG" ]; then
+  CHANGES=$(git log "$LAST_TAG"..HEAD --pretty=format:"- %s" --no-merges)
+else
+  CHANGES=$(git log --pretty=format:"- %s" --no-merges)
+fi
+
+# 使用 claude 自动更新 README.md 和 CHANGELOG.md
+echo "正在自动更新文档..."
+claude -p --allowedTools 'Read,Edit,Write,Bash(git diff:*)' \
+  "你正在帮助发布 npm 包 caiyan-cli 的新版本 $NEW (上一版本: $CURRENT)。
+
+以下是自上次发布以来的 git 提交记录:
+$CHANGES
+
+请完成以下任务:
+1. 读取 README.md，根据代码变更更新功能说明、操作表格等内容（如果已经是最新的则不改）
+2. 读取 CHANGELOG.md，在 [Unreleased] 下方添加 ## [$NEW] - $(date +%Y-%m-%d) 章节，按 Added/Changed/Fixed/Removed 分类记录变更（从 git 提交中提取，不要包含 chore/docs 类型的提交）
+
+注意:
+- 保持现有文件格式和风格一致
+- CHANGELOG 中只记录对用户有意义的变更
+- 不要修改历史版本的记录
+- 用中文描述变更内容"
+
+if [ $? -ne 0 ]; then
+  echo "❌ 文档更新失败"
+  git checkout -- package.json
+  exit 1
+fi
+
+# 展示变更并等待确认
+echo ""
+echo "📄 文档变更如下:"
+echo "────────────────────────────────────────"
+git diff README.md CHANGELOG.md
+echo "────────────────────────────────────────"
+echo ""
+read -p "确认发布 $NEW？(y/n): " confirm
+if [ "$confirm" != "y" ]; then
+  echo "已取消，回滚版本号..."
+  git checkout -- package.json README.md CHANGELOG.md
+  exit 0
+fi
+
+# 提交所有变更
+git add package.json README.md CHANGELOG.md
 git commit -m "chore: release $NEW"
 git tag "$NEW"
 
