@@ -61,8 +61,8 @@ fi
 
 # 使用 claude 自动更新 README.md 和 CHANGELOG.md
 echo "正在自动更新文档..."
-claude -p --allowedTools 'Read,Edit,Write,Bash(git diff:*)' \
-  "你正在帮助发布 npm 包 caiyan-cli 的新版本 $NEW (上一版本: $CURRENT)。
+cat <<PROMPT | claude -p --allowedTools 'Read,Edit,Write,Bash(git diff:*)'
+你正在帮助发布 npm 包 caiyan-cli 的新版本 $NEW (上一版本: $CURRENT)。
 
 以下是自上次发布以来的 git 提交记录:
 $CHANGES
@@ -75,7 +75,8 @@ $CHANGES
 - 保持现有文件格式和风格一致
 - CHANGELOG 中只记录对用户有意义的变更
 - 不要修改历史版本的记录
-- 用中文描述变更内容"
+- 用中文描述变更内容
+PROMPT
 
 if [ $? -ne 0 ]; then
   echo "❌ 文档更新失败"
